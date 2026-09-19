@@ -1,0 +1,31 @@
+page:
+  title: Live disconnect check · Lavish
+  refs: 22
+snapshot:
+uid=g3:1_0 RootWebArea "Live disconnect check · Lavish" url="http://127.0.0.1:64733/session/dcd038f50f9a3737"
+  uid=g3:1_1 StaticText "Lavish"
+  uid=g3:1_2 StaticText "EDITOR"
+  uid=g3:1_3 button "Annotate" description="Toggle annotate/explore mode (⌘I / Ctrl+I)" pressed
+  uid=g3:1_4 button "More" expandable haspopup="menu"
+  uid=g3:1_5 Iframe
+    uid=g3:1_6 RootWebArea "Live disconnect check" url="http://127.0.0.1:64733/artifact/dcd038f50f9a3737/index.html?artifact_revision=1&artifact_load_token=B61zGI5PL_YAYlzRyYOEK7jgYW0_Ky7S"
+      uid=g3:1_7 main
+        uid=g3:1_8 heading "Live review stays understandable" level="1"
+        uid=g3:1_9 StaticText "This board will simulate a dropped server."
+  uid=g3:1_10 complementary
+    uid=g3:1_11 heading "Conversation" level="2"
+    uid=g3:1_12 StaticText "Agent hasn't sent a message yet. Click an element in the artifact to annotate, or type below to start."
+    uid=g3:3_0 StaticText "The Lavish server this page was connected to is no longer running. Reloading will work once it is running again."
+    uid=g3:3_1 button "Check and reload"
+    uid=g3:3_2 button "Dismiss"
+    uid=g3:1_13 StaticText "Your agent is not listening. If this persists, ask your agent to poll for updates from Lavish."
+    uid=g3:1_14 textbox "Write a message for the agent..." multiline
+    uid=g3:1_15 button "Attach images"
+    uid=g3:1_16 status atomic live="polite" relevant="additions text"
+    uid=g3:1_17 button "Send & End"
+    uid=g3:1_18 button "Send to Agent"
+help[4]:
+  Run `chrome-devtools-axi fill @g3:1_14 "text"` to fill the "Write a message for the agent..." field
+  Run `chrome-devtools-axi click @g3:1_3` to click the "Annotate" button
+  Run `chrome-devtools-axi scroll down` to scroll down
+  Use `chrome-devtools-axi eval <expr>` for JS expressions. For multi-statement code, pass a function: `eval "() => { ...; return result }"`

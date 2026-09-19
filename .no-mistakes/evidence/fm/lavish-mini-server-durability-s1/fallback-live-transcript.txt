@@ -1,0 +1,28 @@
+$ LAVISH_AXI_HOST=192.0.2.1 node dist/cli.mjs .test-live-fallback/review.html
+session:
+  file: /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html
+  url: "http://127.0.0.1:64547/session/6958423bae431b87"
+  status: opened
+network_warning: Could not bind 192.0.2.1; Lavish fell back to loopback and is not reachable at that address.
+self_paint_warning: "This artifact never paints its own page surface: no background on html/body/:root, no bg-* class or data-theme on html/body, and no stylesheet that could set one. Lavish injects no design system, so text that assumes a dark or light host surface can render invisible. Set an explicit background and readable text."
+next_step: "First fix the unpainted page surface flagged in self_paint_warning and save - Lavish live-reloads the artifact automatically, so you do not need to re-run `lavish-axi /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html`. Do not respond to the user just yet. Now you must run `lavish-axi poll /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html`. This command long-polls until the user sends feedback, ends the session, or leaves every review window disconnected past the reconnect grace period, and it stays silent the whole time - that is normal, never kill it. Layout issues the browser detects do not return this poll; they wait in the user's Layout issues inbox until the user queues them, then arrive as an ordinary tag \"layout-warnings\" prompt. Do not pass --timeout-ms during normal agent use. Keep the poll in the foreground by default and let it return the feedback directly to the agent. A background poll is allowed only through a harness-native tracked background-job facility whose completion result is guaranteed to resume or notify the same agent. Never use `nohup`, shell `&`, `disown`, redirected fire-and-forget processes, or a detached terminal without an explicit verified callback merely to keep polling alive. If the harness has no completion-aware background facility, use the foreground poll or first wire a verified wake callback into the surrounding supervisor. Do not tell the user the artifact is being monitored until that wake path is live. If the poll gets killed or times out before feedback arrives, re-run it - feedback remains queued until delivery. Poll delivery consumes the response, so read it completely. If it returns browser_disconnected, the review window stayed disconnected past its reconnect grace period but the session remains resumable; ask the user whether to reopen or end it, and do neither uninvited. After applying feedback, run `lavish-axi poll /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html --agent-reply \"<message for the user>\"` without --timeout-ms to show a concise response in Lavish Editor and wait for more feedback. Keep the reply concise. Only when a longer reply is genuinely necessary, use Markdown structure - blank-line paragraphs, `- ` / `1. ` lists, `## ` headings - so it renders scannably instead of a wall of text, and pass that body with `--agent-reply-file <path>` (`-` reads stdin) so newlines survive quoting. The Conversation panel's Markdown subset is in `lavish-axi poll --help` and README. If the user ends the session, stop polling and do not reopen it by re-running `lavish-axi /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html` unless the user asks for further review or something genuinely important needs their visual attention - deliver routine updates directly in this conversation instead. When reopening is warranted, run `lavish-axi /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2VFPSHQSB8RBX4T3RA63GEE/.test-live-fallback/review.html --reopen`."
+
+$ curl loopback /health?reconcile_network=1
+{"ok":true,"app":"lavish-axi","version":"0.1.72","network_warning":"Could not bind 192.0.2.1; Lavish fell back to loopback and is not reachable at that address."}
+$ curl requested unavailable address (proxy disabled)
+curl: (28) Connection timed out after 1003 milliseconds
+connection unavailable as expected
+
+$ node dist/cli.mjs stop
+server:
+  status: stopped
+  port: 64547
+
+$ server.log
+2026-09-19T01:26:42.542Z [lavish] WARNING: Could not bind 192.0.2.1; Lavish fell back to loopback and is not reachable at that address. Address: 192.0.2.1:64547.
+2026-09-19T01:26:54.399Z [lavish] shutting down: shutdown-request (reason=stop)
+2026-09-19T01:26:54.400Z 
+
+$ post-stop loopback probe
+curl: (7) Failed to connect to 127.0.0.1 port 64547 after 0 ms: Could not connect to server
+server stopped cleanly

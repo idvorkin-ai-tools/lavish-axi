@@ -1,0 +1,7 @@
+$ Connect a real WebSocket client with automatic pong disabled to simulate a slept laptop
+connected: readyState=1
+server ping received at 30s; intentionally unanswered
+reaped: close code=1006, readyState=3, elapsed=60s
+
+$ Health remains available after stale reviewer is reaped
+{"ok":true,"app":"lavish-axi","version":"0.1.72"}

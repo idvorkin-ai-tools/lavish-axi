@@ -1,0 +1,42 @@
+$ Abruptly terminate the real Lavish server and wait through five reconnect failures
+server health: unreachable; banner control: @g6:2_1
+
+$ Click Check and reload while the server remains down
+page:
+  title: Live disconnect check · Lavish
+  refs: 22
+snapshot:
+uid=g7:1_0 RootWebArea "Live disconnect check · Lavish" url="http://127.0.0.1:49291/session/dcd038f50f9a3737"
+  uid=g7:1_1 StaticText "Lavish"
+  uid=g7:1_2 StaticText "EDITOR"
+  uid=g7:1_3 button "Annotate" description="Toggle annotate/explore mode (⌘I / Ctrl+I)" pressed
+  uid=g7:1_4 button "More" expandable haspopup="menu"
+  uid=g7:1_5 Iframe
+    uid=g7:1_6 RootWebArea "Live disconnect check" url="http://127.0.0.1:49291/artifact/dcd038f50f9a3737/index.html?artifact_revision=1&artifact_load_token=5ddMwYCnNqmSIMmnGc6b78Zbf3JOrOwa"
+      uid=g7:1_7 main
+        uid=g7:1_8 heading "Live review stays understandable" level="1"
+        uid=g7:1_9 StaticText "This board will simulate a dropped server."
+  uid=g7:1_10 complementary
+    uid=g7:1_11 heading "Conversation" level="2"
+    uid=g7:1_12 StaticText "Agent hasn't sent a message yet. Click an element in the artifact to annotate, or type below to start."
+    uid=g7:4_0 StaticText "Lavish is still not running. Start it again, then use Check and reload."
+    uid=g7:2_1 button "Check and reload"
+    uid=g7:2_2 button "Dismiss"
+    uid=g7:1_13 StaticText "Your agent is not listening. If this persists, ask your agent to poll for updates from Lavish."
+    uid=g7:1_14 textbox "Write a message for the agent..." multiline
+    uid=g7:1_15 button "Attach images"
+    uid=g7:1_16 status atomic live="polite" relevant="additions text"
+    uid=g7:1_17 button "Send & End"
+    uid=g7:1_18 button "Send to Agent"
+help[4]:
+  Run `chrome-devtools-axi fill @g7:1_14 "text"` to fill the "Write a message for the agent..." field
+  Run `chrome-devtools-axi click @g7:1_3` to click the "Annotate" button
+  Run `chrome-devtools-axi scroll down` to scroll down
+  Use `chrome-devtools-axi eval <expr>` for JS expressions. For multi-statement code, pass a function: `eval "() => { ...; return result }"`
+waited: "500"
+help[1]:
+  Run `chrome-devtools-axi snapshot` to see current page state
+uid=g8:1_0 RootWebArea "Live disconnect check · Lavish" url="http://127.0.0.1:49291/session/dcd038f50f9a3737"
+    uid=g8:1_6 RootWebArea "Live disconnect check" url="http://127.0.0.1:49291/artifact/dcd038f50f9a3737/index.html?artifact_revision=1&artifact_load_token=5ddMwYCnNqmSIMmnGc6b78Zbf3JOrOwa"
+    uid=g8:2_1 button "Check and reload"
+    uid=g8:2_2 button "Dismiss"
