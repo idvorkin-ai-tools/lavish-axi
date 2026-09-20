@@ -1,0 +1,2 @@
+POST_LISTEN: health={"ok":true,"app":"lavish-axi","version":"0.1.73"} graceful_exit=0
+UNCAUGHT: deterministic_exit=1

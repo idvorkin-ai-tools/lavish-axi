@@ -1,0 +1,7 @@
+2026-09-20T07:00:44.568Z (node:10406) UnhandledPromiseRejectionWarning: Error: warn-policy-rejection
+2026-09-20T07:00:44.568Z     at Immediate.<anonymous> (file:///Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M2YSG2B8F4KEAYKFX6WG9X27/.tmp-live-rejection-policy-check/rejection.mjs:4:122)
+2026-09-20T07:00:44.568Z     at process.processImmediate (node:internal/timers:504:21)
+2026-09-20T07:00:44.568Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-09-20T07:00:44.569Z (node:10406) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)
+2026-09-20T07:00:44.604Z [lavish] shutting down: shutdown-request
+2026-09-20T07:00:44.604Z 

@@ -1,0 +1,2 @@
+2026-09-20T07:00:23.769Z error: "Lavish server failed to bind any address: listen EADDRINUSE: address already in use 127.0.0.1:52399"
+2026-09-20T07:00:23.771Z code: UNKNOWN

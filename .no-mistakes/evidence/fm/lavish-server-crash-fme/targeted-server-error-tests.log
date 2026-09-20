@@ -1,0 +1,10 @@
+✔ a post-listen HTTP error is logged while the server remains controllably alive (126.947209ms)
+✔ an uncaught server exception is timestamped before deterministic exit (225.788917ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 451.100291
