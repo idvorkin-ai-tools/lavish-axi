@@ -1,0 +1,5 @@
+session:
+  file: /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M30237AS3Q4VQGJG3AGEQDKR/.test-live/listener-demo.html
+  status: waiting
+next_step: "No user feedback arrived before the optional timeout. Run `lavish-axi poll /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M30237AS3Q4VQGJG3AGEQDKR/.test-live/listener-demo.html` without --timeout-ms to wait indefinitely - feedback remains queued until delivery, so re-running the poll is safe while waiting. Poll delivery consumes the response, so read it completely."
+takeover exit=0

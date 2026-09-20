@@ -1,0 +1,4 @@
+error: Lavish Editor poll listener was replaced by a takeover
+code: LISTENER_REPLACED
+help[1]: Re-run lavish-axi poll /Users/kunchen/.no-mistakes/worktrees/e41c0f926200/01M30237AS3Q4VQGJG3AGEQDKR/.test-live/listener-demo.html only if you intend to take over listening
+displaced poll process active after takeover: no

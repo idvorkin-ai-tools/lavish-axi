@@ -1,0 +1,4 @@
+error: "Lavish Editor already has an active poll listener (current listener: supervisor-7; active for 12096ms)"
+code: LISTENER_ACTIVE
+help[1]: Use --takeover only when you intend to displace the current listener
+second poll exit=1
