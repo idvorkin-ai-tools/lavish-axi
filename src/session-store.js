@@ -54,8 +54,30 @@ export class SessionStore {
     // One mutex serializes every state.json read-modify-write and the server's
     // attachment disk lifecycle sections through runExclusive.
     this.lock = new AsyncMutex();
+    // Hot copies of `session.artifact_load`, which is the durable record. A process that did not
+    // issue the load reads it back through `#activeArtifactLoad` the first time it is asked for.
     this.artifactLoads = new Map();
     this.chromeLoadContexts = new Map();
+  }
+
+  // The one reader of the active load. It exists because the load outlives the process that
+  // issued it: an upgrade restart replaces the server under a reviewer who never asked for it,
+  // and a load this store merely forgot is not a load that ended. Whether a token is still
+  // current is decided by `beginArtifactLoad` alone - nothing else may retire one.
+  #activeArtifactLoad(session) {
+    const cached = this.artifactLoads.get(session.key);
+    if (cached) return cached;
+    const restored = restoreArtifactLoad(session.artifact_load);
+    if (!restored) return undefined;
+    this.artifactLoads.set(session.key, restored);
+    // The handoff that owns this load is part of the same record. Restoring the load without it
+    // would hand the review to whichever tab re-handshakes first, so a restart would decide the
+    // single-reviewer question that only an explicit takeover is allowed to decide. A handoff
+    // this process has already issued is newer than the record and always wins.
+    if (restored.handoffToken && !this.chromeLoadContexts.has(session.key)) {
+      this.chromeLoadContexts.set(session.key, restored.handoffToken);
+    }
+    return restored;
   }
 
   async listSessions() {
@@ -105,6 +127,9 @@ export class SessionStore {
       // must never silently drop unresolved warnings the user has not triaged yet.
       layout_warnings: normalizeStoredWarnings(existing.layout_warnings),
       artifact_revision: normalizeRevision(existing.artifact_revision),
+      // The reviewer's open tab is holding this token, so reopening the artifact must not retire
+      // it: only a newer `beginArtifactLoad` retires a load.
+      artifact_load: normalizeStoredArtifactLoad(existing.artifact_load),
       artifact_failures: Array.isArray(existing.artifact_failures) ? existing.artifact_failures : [],
       // Carried across a reopen on purpose: this list is what keeps a just-delivered
       // attachment out of the sweeper's reach, and re-opening the artifact during the
@@ -299,7 +324,7 @@ export class SessionStore {
       }
       const chromeLoadToken = crypto.randomBytes(24).toString("base64url");
       this.chromeLoadContexts.set(key, chromeLoadToken);
-      const activeLoad = this.artifactLoads.get(key);
+      const activeLoad = this.#activeArtifactLoad(session);
       return {
         session,
         chrome_load_token: chromeLoadToken,
@@ -323,8 +348,11 @@ export class SessionStore {
       const normalizedRequestSequence =
         Number.isSafeInteger(parsedRequestSequence) && parsedRequestSequence > 0 ? parsedRequestSequence : 0;
       const normalizedHandoffToken = String(handoffToken || "");
+      // Read the load first: restoring it is also what re-establishes the handoff that owns it,
+      // so a reviewer whose server was replaced is not answered `no-handoff` for holding a
+      // capability that is still the current one.
+      const activeLoad = this.#activeArtifactLoad(session);
       const activeHandoffToken = this.chromeLoadContexts.get(key) || "";
-      const activeLoad = this.artifactLoads.get(key);
       const staleResult = (status) => ({
         session,
         stale: status,
@@ -357,14 +385,16 @@ export class SessionStore {
       }
       const artifactRevision = normalizeRevision(session.artifact_revision) + 1;
       const artifactLoadToken = crypto.randomBytes(24).toString("base64url");
-      this.artifactLoads.set(key, {
+      const load = {
         artifactRevision,
         artifactLoadToken,
         lastPassSequence: 0,
         requestId: normalizedRequestId,
         requestSequence: normalizedRequestSequence,
         handoffToken: normalizedHandoffToken,
-      });
+      };
+      this.artifactLoads.set(key, load);
+      session.artifact_load = serializeArtifactLoad(load);
       session.artifact_revision = artifactRevision;
       session.updated_at = new Date().toISOString();
       await this.writeState(state);
@@ -379,7 +409,7 @@ export class SessionStore {
       if (!session) {
         return null;
       }
-      const load = this.artifactLoads.get(key);
+      const load = this.#activeArtifactLoad(session);
       const revision = parseRevisionValue(artifactRevision);
       const valid = Boolean(
         load &&
@@ -410,7 +440,7 @@ export class SessionStore {
         return null;
       }
       const revision = normalizeRevision(session.artifact_revision);
-      const load = this.artifactLoads.get(key);
+      const load = this.#activeArtifactLoad(session);
       const artifactLoadToken = String(payload?.artifact_load_token || payload?.artifactLoadToken || "");
       const reportedRevision = parseDiagnosticRevision(payload);
       const passSequence = parsePassSequence(payload);
@@ -450,6 +480,11 @@ export class SessionStore {
         return { session, changed: false, warnings: serializeLayoutWarnings(warnings) };
       }
       session.layout_warnings = warnings;
+      // Ride along with a write this pass was already making. The pass fence is deliberately NOT
+      // worth a write of its own: a repeat pass that changes no warning must not rewrite
+      // state.json, and a fence restored one pass behind only re-admits a pass whose findings
+      // `applyDiagnosticPass` already treats as the same answer.
+      session.artifact_load = serializeArtifactLoad(load);
       session.updated_at = at;
       await this.writeState(state);
       return { session, changed: true, warnings: serializeLayoutWarnings(warnings) };
@@ -509,7 +544,7 @@ export class SessionStore {
       if (!session) {
         return null;
       }
-      const load = this.artifactLoads.get(key);
+      const load = this.#activeArtifactLoad(session);
       const artifactLoadToken = String(payload?.artifact_load_token || payload?.artifactLoadToken || "");
       const reportedRevision = parseDiagnosticRevision(payload);
       if (
@@ -910,6 +945,50 @@ function planLayoutWarningPrompt(warnings, prompt, revision) {
   }
 
   return { warningIds, expectedRevision, conflicts, queueIds, hadKnownWarning };
+}
+
+// The active artifact load, in the shape state.json carries it. Snake-cased like every other
+// stored field, and complete: the fences a begin is judged against (`request_id`,
+// `request_sequence`, `handoff_token`) belong to the same epoch as the token, so a process that
+// restored the token without them would answer a reviewer's retry with a new epoch, or let a
+// begin the previous process already overtook win.
+function serializeArtifactLoad(load) {
+  return {
+    artifact_load_token: load.artifactLoadToken,
+    artifact_revision: load.artifactRevision,
+    last_pass_sequence: load.lastPassSequence,
+    request_id: load.requestId,
+    request_sequence: load.requestSequence,
+    handoff_token: load.handoffToken,
+  };
+}
+
+// Anything this cannot read as a whole load is treated as no load at all, so an older or
+// hand-edited state.json degrades to the pre-persistence behaviour - one re-handshake and a fresh
+// epoch - rather than admitting a token the store cannot describe.
+function restoreArtifactLoad(stored) {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
+  const artifactLoadToken = String(stored.artifact_load_token || "");
+  const artifactRevision = parseRevisionValue(stored.artifact_revision);
+  if (!artifactLoadToken || artifactRevision === null) return null;
+  return {
+    artifactRevision,
+    artifactLoadToken,
+    lastPassSequence: normalizeSequence(stored.last_pass_sequence),
+    requestId: String(stored.request_id || ""),
+    requestSequence: normalizeSequence(stored.request_sequence),
+    handoffToken: String(stored.handoff_token || ""),
+  };
+}
+
+function normalizeStoredArtifactLoad(stored) {
+  const restored = restoreArtifactLoad(stored);
+  return restored ? serializeArtifactLoad(restored) : null;
+}
+
+function normalizeSequence(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
 function normalizeRevision(value) {
