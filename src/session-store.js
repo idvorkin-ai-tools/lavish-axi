@@ -74,7 +74,7 @@ export class SessionStore {
     // would hand the review to whichever tab re-handshakes first, so a restart would decide the
     // single-reviewer question that only an explicit takeover is allowed to decide. A handoff
     // this process has already issued is newer than the record and always wins.
-    if (restored.handoffToken && !this.chromeLoadContexts.has(session.key)) {
+    if (!this.chromeLoadContexts.has(session.key)) {
       this.chromeLoadContexts.set(session.key, restored.handoffToken);
     }
     return restored;
@@ -979,8 +979,12 @@ const STORED_ARTIFACT_LOAD_FIELDS = [
 // while its own reviewer's next begin is told `no-handoff`, and without `request_sequence` a begin
 // the previous process already overtook wins. So an older or hand-edited state.json degrades to
 // the pre-persistence behaviour - one re-handshake and a fresh epoch - rather than admitting a
-// load the store can only partly describe. Presence and type are what is checked, never value:
-// `request_id` is legitimately "" and both sequences are legitimately 0 on a just-begun load.
+// load the store can only partly describe. Presence and type are what is checked, not value:
+// `request_id` is legitimately "" and every integer fence is legitimately 0 on a just-begun load.
+// The two tokens are additionally required non-empty, which rejects nothing this code wrote
+// (`beginArtifactLoad` only mints non-empty ones) and is load-bearing for `artifact_load_token`:
+// diagnostics compare their own token against it, so an empty restored token would be matched by
+// a token-less pass.
 function restoreArtifactLoad(stored) {
   if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
   if (STORED_ARTIFACT_LOAD_FIELDS.some((field) => !Object.hasOwn(stored, field))) return null;
@@ -990,7 +994,7 @@ function restoreArtifactLoad(stored) {
   if (typeof artifactLoadToken !== "string" || !artifactLoadToken) return null;
   if (typeof handoffToken !== "string" || !handoffToken) return null;
   if (typeof requestId !== "string") return null;
-  const artifactRevision = parseRevisionValue(stored.artifact_revision);
+  const artifactRevision = parseSequenceValue(stored.artifact_revision);
   const lastPassSequence = parseSequenceValue(stored.last_pass_sequence);
   const requestSequence = parseSequenceValue(stored.request_sequence);
   if (artifactRevision === null || lastPassSequence === null || requestSequence === null) return null;

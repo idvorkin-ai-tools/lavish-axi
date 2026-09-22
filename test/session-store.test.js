@@ -499,6 +499,10 @@ test("a stored artifact load with a malformed fence is no load at all", async ()
     { request_sequence: -1 },
     { request_id: 7 },
     { artifact_revision: "one" },
+    { artifact_revision: null },
+    { artifact_revision: true },
+    { artifact_revision: "1" },
+    { artifact_revision: 1.5 },
     { handoff_token: "" },
     { artifact_load_token: "" },
   ];
@@ -529,6 +533,7 @@ test("a stored artifact load with a malformed fence is no load at all", async ()
         load.artifact_revision,
       );
       assert.equal(verified.valid, false, `${JSON.stringify(corruption)} was honored`);
+      assert.equal(verified.artifact_load_token, "", `${JSON.stringify(corruption)} was reported as current`);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
