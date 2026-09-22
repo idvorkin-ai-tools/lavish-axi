@@ -963,22 +963,38 @@ function serializeArtifactLoad(load) {
   };
 }
 
-// Anything this cannot read as a whole load is treated as no load at all, so an older or
-// hand-edited state.json degrades to the pre-persistence behaviour - one re-handshake and a fresh
-// epoch - rather than admitting a token the store cannot describe.
+// Every key `serializeArtifactLoad` writes. A record this code wrote always carries all six, so a
+// record missing one was not written by this code and cannot be read as a whole.
+const STORED_ARTIFACT_LOAD_FIELDS = [
+  "artifact_load_token",
+  "artifact_revision",
+  "last_pass_sequence",
+  "request_id",
+  "request_sequence",
+  "handoff_token",
+];
+
+// All of the epoch or none of it. Restoring a partial record would honor the token while some
+// fence it travels with defaulted away: without `handoff_token` the load answers 200 to everyone
+// while its own reviewer's next begin is told `no-handoff`, and without `request_sequence` a begin
+// the previous process already overtook wins. So an older or hand-edited state.json degrades to
+// the pre-persistence behaviour - one re-handshake and a fresh epoch - rather than admitting a
+// load the store can only partly describe. Presence and type are what is checked, never value:
+// `request_id` is legitimately "" and both sequences are legitimately 0 on a just-begun load.
 function restoreArtifactLoad(stored) {
   if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
-  const artifactLoadToken = String(stored.artifact_load_token || "");
+  if (STORED_ARTIFACT_LOAD_FIELDS.some((field) => !Object.hasOwn(stored, field))) return null;
+  const artifactLoadToken = stored.artifact_load_token;
+  const handoffToken = stored.handoff_token;
+  const requestId = stored.request_id;
+  if (typeof artifactLoadToken !== "string" || !artifactLoadToken) return null;
+  if (typeof handoffToken !== "string" || !handoffToken) return null;
+  if (typeof requestId !== "string") return null;
   const artifactRevision = parseRevisionValue(stored.artifact_revision);
-  if (!artifactLoadToken || artifactRevision === null) return null;
-  return {
-    artifactRevision,
-    artifactLoadToken,
-    lastPassSequence: normalizeSequence(stored.last_pass_sequence),
-    requestId: String(stored.request_id || ""),
-    requestSequence: normalizeSequence(stored.request_sequence),
-    handoffToken: String(stored.handoff_token || ""),
-  };
+  const lastPassSequence = parseSequenceValue(stored.last_pass_sequence);
+  const requestSequence = parseSequenceValue(stored.request_sequence);
+  if (artifactRevision === null || lastPassSequence === null || requestSequence === null) return null;
+  return { artifactRevision, artifactLoadToken, lastPassSequence, requestId, requestSequence, handoffToken };
 }
 
 function normalizeStoredArtifactLoad(stored) {
@@ -986,9 +1002,10 @@ function normalizeStoredArtifactLoad(stored) {
   return restored ? serializeArtifactLoad(restored) : null;
 }
 
-function normalizeSequence(value) {
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number > 0 ? number : 0;
+// Null rather than 0 for anything unreadable: 0 is a real sequence, so coercing to it would turn a
+// corrupt fence into an open one.
+function parseSequenceValue(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 function normalizeRevision(value) {
