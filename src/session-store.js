@@ -980,7 +980,9 @@ const STORED_ARTIFACT_LOAD_FIELDS = [
 // the previous process already overtook wins. So an older or hand-edited state.json degrades to
 // the pre-persistence behaviour - one re-handshake and a fresh epoch - rather than admitting a
 // load the store can only partly describe. Presence and type are what is checked, not value:
-// `request_id` is legitimately "" and every integer fence is legitimately 0 on a just-begun load.
+// `request_id` is legitimately "" and both sequence fences are legitimately 0 on a just-begun
+// load. The revision is not: `beginArtifactLoad` only mints positive ones, so 0 is a value this
+// code never wrote and a load restored with it would be served at a revision that never existed.
 // The two tokens are additionally required non-empty, which rejects nothing this code wrote
 // (`beginArtifactLoad` only mints non-empty ones) and is load-bearing for `artifact_load_token`:
 // diagnostics compare their own token against it, so an empty restored token would be matched by
@@ -995,6 +997,7 @@ function restoreArtifactLoad(stored) {
   if (typeof handoffToken !== "string" || !handoffToken) return null;
   if (typeof requestId !== "string") return null;
   const artifactRevision = parseSequenceValue(stored.artifact_revision);
+  if (artifactRevision === 0) return null;
   const lastPassSequence = parseSequenceValue(stored.last_pass_sequence);
   const requestSequence = parseSequenceValue(stored.request_sequence);
   if (artifactRevision === null || lastPassSequence === null || requestSequence === null) return null;

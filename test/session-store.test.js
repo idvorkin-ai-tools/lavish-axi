@@ -503,6 +503,8 @@ test("a stored artifact load with a malformed fence is no load at all", async ()
     { artifact_revision: true },
     { artifact_revision: "1" },
     { artifact_revision: 1.5 },
+    { artifact_revision: 0 },
+    { artifact_revision: -1 },
     { handoff_token: "" },
     { artifact_load_token: "" },
   ];
