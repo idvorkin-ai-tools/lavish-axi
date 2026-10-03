@@ -44,8 +44,11 @@ function createElement(tag) {
         .split(",")
         .some((part) => {
           const selector = part.trim();
-          if (selector.startsWith("[")) return attributes.has(selector.slice(1, selector.indexOf("]")).split("=")[0]);
-          return selector === element.tagName.toLowerCase();
+          // `tag`, `[attr]`, or `tag[attr]` (e.g. `a[href]`): enough selector for what the SDK asks.
+          const bracket = selector.indexOf("[");
+          const tag = bracket >= 0 ? selector.slice(0, bracket) : selector;
+          if (tag && tag !== element.tagName.toLowerCase()) return false;
+          return bracket < 0 || attributes.has(selector.slice(bracket + 1, selector.indexOf("]")).split("=")[0]);
         });
     },
     closest(selectorList) {
@@ -185,10 +188,23 @@ function bootSdk({ runAnimationFrames = false, revisionsScript = null, revisionM
     posted,
     body,
     api: sandbox.window.lavish,
-    click(target) {
+    // Returns the dispatched event so a test can tell whether the SDK swallowed the click.
+    click(target, modifiers = {}) {
       const listener = documentListeners.find((entry) => entry.type === "click");
       assert.ok(listener, "the SDK registers a document click listener");
-      listener.handler({ target, preventDefault() {}, stopPropagation() {} });
+      const event = {
+        target,
+        ctrlKey: false,
+        metaKey: false,
+        ...modifiers,
+        defaultPrevented: false,
+        preventDefault() {
+          event.defaultPrevented = true;
+        },
+        stopPropagation() {},
+      };
+      listener.handler(event);
+      return event;
     },
     setDocumentQuery(query) {
       documentQuery = query;
@@ -660,4 +676,63 @@ test("a click inside a table cell opens only the note on the exact element click
 
   assert.equal(sdk.cards().length, cardsBefore + 1);
   assert.notEqual(sdk.posted.at(-1)?.type, "lavish:editQueuedAnchor");
+});
+
+// In annotate mode a plain click on a link annotates it, so Ctrl-click (Cmd-click on macOS) is the
+// way to follow the link without leaving annotate mode: the SDK steps aside and the browser opens it.
+function buildLink(sdk) {
+  const link = appendTo(sdk.body, cell("a", "Read the spec"));
+  link.setAttribute("href", "https://example.com/spec");
+  const inner = appendTo(link, cell("span", "spec"));
+  return { link, inner };
+}
+
+for (const modifier of ["ctrlKey", "metaKey"]) {
+  test(`${modifier}-click on a link in annotate mode follows the link instead of annotating`, () => {
+    const sdk = bootSdk();
+    const { link, inner } = buildLink(sdk);
+
+    for (const target of [link, inner]) {
+      const event = sdk.click(target, { [modifier]: true });
+      assert.equal(event.defaultPrevented, false, "the browser's own link handling runs");
+    }
+    assert.equal(sdk.cards().length, 0);
+  });
+}
+
+test("a plain click on a link in annotate mode still opens an annotation card", () => {
+  const sdk = bootSdk();
+  const { link } = buildLink(sdk);
+
+  const event = sdk.click(link);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.match(sdk.card().innerHTML, /Annotate &lt;a&gt;/);
+});
+
+test("a modified click on something that is not a link still annotates", () => {
+  const sdk = bootSdk();
+  const paragraph = appendTo(sdk.body, cell("p", "Just prose"));
+
+  const event = sdk.click(paragraph, { ctrlKey: true });
+
+  assert.equal(event.defaultPrevented, true);
+  assert.match(sdk.card().innerHTML, /Annotate &lt;p&gt;/);
+});
+
+test("Ctrl-click follows a link even when the link already has a queued note", () => {
+  const sdk = bootSdk();
+  const { link } = buildLink(sdk);
+  sdk.click(link);
+  const queued = sdk.queue("Is this the right spec?");
+  sdk.sendChromeMessage({ type: "lavish:queuedAnchors", selectors: [queued.prompt.selector] });
+  const postedBefore = sdk.posted.length;
+
+  const event = sdk.click(link, { ctrlKey: true });
+
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(
+    sdk.posted.slice(postedBefore).some((message) => message.type === "lavish:editQueuedAnchor"),
+    false,
+  );
 });
