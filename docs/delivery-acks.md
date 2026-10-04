@@ -36,8 +36,8 @@ queued ──send──> sent ──poll takes it──> seen ──artifact cha
 
 - **queued**: in the tab only (dashed bubble). Unchanged.
 - **sent**: a `role: "user"` chat entry with no `delivered_at`. The bubble says why it has not been
-  seen, from the live presence the chrome already holds: "no agent is listening" (`waiting`),
-  "agent is busy, delivered on its next poll" (`working` / external listener), or plain "sent"
+  seen, from the live presence the chrome already holds: "No agent is listening" (`waiting`),
+  "Agent is busy; delivered on its next poll" (`working` / external listener), or "Delivering"
   while a poll is attached, which lasts milliseconds.
 - **seen**: `delivered_at` set by `takeFeedback`.
 - **working**: `working_at` set by the first artifact `reload` after delivery. Optional evidence.
@@ -67,7 +67,7 @@ the stamps with no new wire shape.
   authoritative replacement.
 - `delivery_seq` is a session field, so `#upsertSessionLocked` carries it across a reopen like
   `chat_revision`. Stamps on `chat` entries survive because `chat` is carried verbatim.
-- The chrome publishes `chat-sync` on the success path of a delivery (`finishFeedbackDelivery`) and
+- The server publishes `chat-sync` on the success path of a delivery (`finishFeedbackDelivery`) and
   after a restore, never on the destructive take itself, so a tab is not told Seen for a batch that
   is about to be put back.
 
