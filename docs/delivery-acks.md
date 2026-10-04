@@ -73,9 +73,12 @@ the stamps with no new wire shape.
 
 ## UI
 
-Each sent user bubble gets a one-line receipt under its text: three checkboxes, `Seen`, `Working`,
-`Done`, each ticked with the time in its tooltip once its stamp exists. Before `Seen` ticks, the row
-carries the honest reason from the presence stream. The session-wide "Working..." bubble and
+Each sent user bubble gets a one-line receipt under its text: the three emoji of the Telegram ack
+protocol this mirrors, 👀 Seen, 🛠️ Working, ✅ Done, each lighting up once its stamp exists and
+shown greyed and dimmed until then, so the row always shows what is still to come. Every step
+carries its label and time (or "not yet") as both `title` and `aria-label`, so hover and screen
+readers say the word, not the glyph. Before 👀 lights, the row carries the honest reason from the
+presence stream. The session-wide "Working..." bubble and
 presence banner are unchanged; the receipt is the per-request view of the same facts.
 
 The receipt is re-rendered when presence changes, because the undelivered line depends on it and

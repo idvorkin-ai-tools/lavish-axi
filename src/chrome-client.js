@@ -920,8 +920,10 @@ function chatBubbleHtml(entry) {
 // Delivery receipt (docs/delivery-acks.md): the per-note view of what the server observed. Seen,
 // Working, and Done are stamps on the entry, so the row is derived from it on every render and
 // never tracked here. Before Seen, the row says why, from the presence the live stream reports.
-const RECEIPT_CHECK_SVG =
-  '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// The three steps are the emoji of the Telegram ack protocol the receipt mirrors (seen, working,
+// done); a step that has not happened is the same glyph dimmed, and every step carries its label
+// and time as `title` and `aria-label`, so hover and screen readers both say the word.
+const RECEIPT_EMOJI = { Seen: "\u{1F440}", Working: "\u{1F6E0}️", Done: "✅" };
 
 function receiptTime(at) {
   const date = new Date(String(at));
@@ -932,15 +934,16 @@ function receiptTime(at) {
 
 function receiptStepHtml(label, at) {
   const ticked = Boolean(at);
+  const text = ticked ? label + " " + receiptTime(at) : label + ": not yet";
   return (
     '<span class="receipt-step' +
     (ticked ? " is-done" : "") +
-    '"' +
-    (ticked ? ' title="' + escapeHtml(label + " " + receiptTime(at)) + '"' : "") +
-    '><span class="receipt-box">' +
-    (ticked ? RECEIPT_CHECK_SVG : "") +
-    "</span>" +
-    label +
+    '" role="img" aria-label="' +
+    escapeHtml(text) +
+    '" title="' +
+    escapeHtml(text) +
+    '">' +
+    RECEIPT_EMOJI[label] +
     "</span>"
   );
 }

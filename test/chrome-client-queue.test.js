@@ -8709,7 +8709,13 @@ test("a sent bubble's receipt follows the entry's seen, working, and done stamps
   assert.equal(receiptNote(bubbles[2].innerHTML), "");
   assert.deepEqual(receiptSteps(bubbles[3].innerHTML), [], "agent bubbles carry no receipt");
   const seenAt = new Date("2026-10-04T10:00:00.000Z").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  assert.ok(bubbles[1].innerHTML.includes(`title="Seen ${seenAt}"`), "a ticked step names its time");
+  assert.ok(bubbles[1].innerHTML.includes(`title="Seen ${seenAt}"`), "a lit step names its time");
+  assert.ok(bubbles[1].innerHTML.includes(`aria-label="Seen ${seenAt}"`), "and says it to screen readers");
+  assert.ok(bubbles[1].innerHTML.includes('aria-label="Done: not yet"'), "an unlit step still names itself");
+  // The glyphs are the Telegram ack protocol's: eyes, tools, check.
+  assert.match(bubbles[1].innerHTML, /<span class="receipt-step is-done"[^>]*>👀<\/span>/);
+  assert.match(bubbles[1].innerHTML, /<span class="receipt-step is-done"[^>]*>🛠️<\/span>/);
+  assert.match(bubbles[1].innerHTML, /<span class="receipt-step"[^>]*>✅<\/span>/);
 });
 
 test("an unseen bubble's receipt names the live presence and re-renders when it changes", async () => {
