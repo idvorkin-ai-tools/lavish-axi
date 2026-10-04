@@ -559,8 +559,24 @@ export function serializeChatSync(session) {
 // returns whether it changed anything, so the store can skip the state.json rewrite when a reload or
 // reply finds nothing to stamp. Stamps are DELETED on revert, never nulled: a restored entry has to be
 // byte-for-byte what it was before the take, which the restore tests assert.
+// Only entries written since receipts existed take part. A transcript from before carries user
+// entries no take ever stamped, and the positional rule would read them as "this batch": the first
+// poll after an upgrade would mark months-old notes Seen today and the next reply would mark them
+// Done. `readState` marks those `receipt: "none"` once, before any new code touches the session.
+export const RECEIPT_NONE = "none";
+
 function isUserEntry(entry) {
-  return Boolean(entry) && typeof entry === "object" && entry.role === "user";
+  return Boolean(entry) && typeof entry === "object" && entry.role === "user" && entry.receipt !== RECEIPT_NONE;
+}
+
+export function markPreReceipt(chat) {
+  let changed = false;
+  for (const entry of Array.isArray(chat) ? chat : []) {
+    if (!entry || typeof entry !== "object" || entry.role !== "user" || entry.receipt === RECEIPT_NONE) continue;
+    entry.receipt = RECEIPT_NONE;
+    changed = true;
+  }
+  return changed;
 }
 
 // `takeFeedback` drains every pending prompt under the store lock, so the undelivered user entries

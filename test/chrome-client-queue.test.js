@@ -8754,3 +8754,21 @@ test("a chat-sync that stamps a note re-renders its receipt", async () => {
   assert.deepEqual(receiptSteps(seen), [true, false, false]);
   assert.equal(receiptNote(seen), "");
 });
+
+test("a transcript entry from before receipts renders no receipt and ignores presence", async () => {
+  const chrome = await createChromeHarness({
+    sessionData: {
+      ...defaultSessionData,
+      initialChat: [
+        { role: "user", kind: "message", text: "Old note", receipt: "none" },
+        { role: "user", kind: "message", text: "New note" },
+      ],
+    },
+  });
+  const bubbles = chrome.element("chatLog").children;
+  assert.equal(bubbles[0].innerHTML, '<small>You</small><div class="bubble-text">Old note</div>');
+  assert.deepEqual(receiptSteps(bubbles[1].innerHTML), [false, false, false]);
+  chrome.eventSource().listeners.get("agent-presence")({ data: JSON.stringify({ state: "working" }) });
+  assert.equal(bubbles[0].innerHTML, '<small>You</small><div class="bubble-text">Old note</div>');
+  assert.equal(receiptNote(bubbles[1].innerHTML), "Agent is busy; delivered on its next poll");
+});

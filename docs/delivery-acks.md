@@ -87,6 +87,27 @@ None required for the automatic path. `lavish-axi poll`, `reply`, and the `/api/
 shapes. Two guidance strings gain one sentence each: `reply --help` and the poll `--agent-reply` row
 in README say that a reply marks every request delivered to you as Done.
 
+## Transcripts from before receipts
+
+The positional rule is only true for sessions the receipt code has written from the start. An
+existing `state.json` holds sessions whose user entries no take ever stamped; read naively, the
+first poll after an upgrade would mark months-old notes Seen today and the next reply would mark
+them Done. `readState`, the one load path every operation shares, therefore marks every user entry
+of a session that has no `delivery_seq` key at all as `receipt: "none"` and persists that at once,
+before any take can run. Those entries are skipped by every stamp helper and render no receipt row:
+nothing was observed about them, and an empty row would read as "never seen".
+
+## Open issues for Igor
+
+- **A progress reply reads as Done.** `poll --agent-reply "still working on it"` stamps Done on
+  every delivered note, exactly as it already clears the session-wide Working state. If a progress
+  channel is wanted, it is a reply flag that posts without concluding; not built here.
+- **Working means "the file changed", not "the agent is on your note".** An agent editing the
+  artifact for an unrelated reason also ticks Working on every delivered, unanswered note. It is the
+  honest automatic signal available; an explicit ack would be more precise and more work for agents.
+- **`lavish-axi end` leaves notes at Seen.** Ending says the agent is finished with the review, not
+  that each note was handled, so Done is not stamped. Say if the board should treat it as Done.
+
 ## Alternatives rejected
 
 - **An explicit `lavish-axi ack <file> --working` command.** It is a new duty for every agent and

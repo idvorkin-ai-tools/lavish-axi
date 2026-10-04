@@ -19,6 +19,7 @@ import {
   boundStoredChat,
   chatEntryForPrompt,
   collectChatAckIds,
+  markPreReceipt,
   normalizePromptId,
   stampDelivered,
   stampDone,
@@ -781,7 +782,17 @@ export class SessionStore {
       const state = { sessions: parsed.sessions || {} };
       let changed = false;
       for (const session of Object.values(state.sessions)) {
-        if (!session || typeof session !== "object" || !applyTranscriptBound(session)) continue;
+        if (!session || typeof session !== "object") continue;
+        // A session the receipt code has never written has no `delivery_seq` key at all. Its user
+        // entries predate receipts, so they are marked out of the stamping rule once, here, on the
+        // one load path every operation shares (docs/delivery-acks.md). Persisted at once: the
+        // marker must exist before the first take, which may run without any upsert.
+        if (!("delivery_seq" in session)) {
+          session.delivery_seq = 0;
+          markPreReceipt(session.chat);
+          changed = true;
+        }
+        if (!applyTranscriptBound(session)) continue;
         session.chat_revision = normalizeRevision(session.chat_revision) + 1;
         changed = true;
       }

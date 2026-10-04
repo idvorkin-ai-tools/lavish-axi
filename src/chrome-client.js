@@ -954,7 +954,14 @@ function receiptNoteText() {
   return "Agent is busy; delivered on its next poll";
 }
 
+// A transcript entry from before receipts existed (`receipt: "none"`, marked by the server once at
+// load) gets no row: nothing was ever observed about it, and an empty row would read as "never seen".
+function hasReceipt(entry) {
+  return Boolean(entry) && entry.receipt !== "none";
+}
+
 function receiptHtml(entry) {
+  if (!hasReceipt(entry)) return "";
   return (
     '<div class="receipt">' +
     receiptStepHtml("Seen", entry.delivered_at) +
@@ -971,7 +978,7 @@ let renderedUserBubbles = [];
 
 function refreshUnseenReceipts() {
   for (const { el, entry } of renderedUserBubbles) {
-    if (entry.delivered_at) continue;
+    if (entry.delivered_at || !hasReceipt(entry)) continue;
     el.innerHTML = chatBubbleHtml(entry);
   }
 }

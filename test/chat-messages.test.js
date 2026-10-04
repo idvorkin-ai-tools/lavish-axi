@@ -6,7 +6,9 @@ import {
   boundStoredChat,
   chatEntryForPrompt,
   collectChatAckIds,
+  markPreReceipt,
   MAX_CHAT_STORED_BYTES,
+  RECEIPT_NONE,
   renderChatMarkdown,
   serializeChat,
   stampDelivered,
@@ -449,4 +451,19 @@ test("serializeChat carries the delivery stamps to the chrome", () => {
   assert.equal(entry.delivered_at, "d");
   assert.equal(entry.working_at, "w");
   assert.equal(entry.done_at, "x");
+});
+
+test("pre-receipt entries are marked once and excluded from every stamp", () => {
+  const chat = [userEntry("Old"), { role: "agent", text: "ok", at }, userEntry("Also old")];
+  assert.equal(markPreReceipt(chat), true);
+  assert.equal(chat[0].receipt, RECEIPT_NONE);
+  assert.equal("receipt" in chat[1], false);
+  assert.equal(markPreReceipt(chat), false, "idempotent");
+  chat.push(userEntry("New"));
+  assert.equal(stampDelivered(chat, 1, at), true);
+  assert.equal("delivered_at" in chat[0], false);
+  assert.equal(chat[3].delivered_seq, 1);
+  assert.equal(stampWorking(chat, at), true);
+  assert.equal(stampDone(chat, at), true);
+  assert.deepEqual(chat[0], userEntry("Old", { receipt: RECEIPT_NONE }));
 });

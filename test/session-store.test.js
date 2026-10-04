@@ -2727,3 +2727,59 @@ test("reopening a session keeps the delivery sequence and the stamps", async () 
     assert.deepEqual(stampsOf(reopened), [{ text: "First", delivered: true, seq: 1, working: false, done: false }]);
   });
 });
+
+test("a transcript older than receipts is marked at load and never stamped", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "lavish-store-"));
+  try {
+    const stateFile = path.join(dir, "state.json");
+    const artifact = path.join(dir, "artifact.html");
+    await writeFile(artifact, "<h1>Hello</h1>");
+    const key = "legacy-session";
+    // What a pre-receipt install left behind: chat with no stamps and no delivery_seq key at all.
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        sessions: {
+          [key]: {
+            key,
+            file: artifact,
+            url: "http://localhost:4387/session/legacy",
+            status: "open",
+            pending_prompts: 0,
+            prompts: [],
+            chat: [
+              { role: "user", kind: "message", text: "From last month", at: "2026-09-01T10:00:00.000Z" },
+              { role: "agent", text: "Done then.", at: "2026-09-01T10:05:00.000Z" },
+            ],
+            chat_revision: 7,
+            updated_at: "2026-09-01T10:05:00.000Z",
+          },
+        },
+      }),
+    );
+
+    const store = new SessionStore(stateFile);
+    const loaded = await store.findByKey(key);
+    assert.equal(loaded.delivery_seq, 0);
+    assert.equal(loaded.chat[0].receipt, "none");
+    assert.equal("receipt" in loaded.chat[1], false, "agent entries are untouched");
+    const persisted = JSON.parse(await readFile(stateFile, "utf8")).sessions[key];
+    assert.equal(persisted.delivery_seq, 0, "the marker is persisted before any take can run");
+    assert.equal(persisted.chat[0].receipt, "none");
+
+    await store.queuePrompts(key, {
+      prompts: [{ uid: "A", prompt: "New note", selector: "", tag: "message", text: "" }],
+    });
+    feedbackResult(await store.takeFeedback(key));
+    await store.addAgentReply(key, "Handled the new one.");
+    const after = await store.findByKey(key);
+    assert.deepEqual(stampsOf(after), [
+      { text: "From last month", delivered: false, seq: null, working: false, done: false },
+      { text: "New note", delivered: true, seq: 1, working: false, done: true },
+    ]);
+    assert.equal(after.chat[0].receipt, "none");
+    assert.equal("receipt" in after.chat[2], false, "entries written since receipts carry no marker");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
