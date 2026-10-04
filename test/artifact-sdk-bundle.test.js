@@ -119,6 +119,8 @@ function bootSdk({ runAnimationFrames = false, revisionsScript = null, revisionM
   };
   /** @type {(selector: string) => any} */
   let documentQuery = () => null;
+  /** @type {any} */
+  let selection = null;
   const documentElement = createElement("html");
   const head = createElement("head");
   const body = createElement("body");
@@ -163,7 +165,7 @@ function bootSdk({ runAnimationFrames = false, revisionsScript = null, revisionM
       querySelector: (selector) =>
         selector === "script[data-lavish-revisions]" ? revisionsScript : documentQuery(selector),
       querySelectorAll: (selector) => (selector === "[data-lavish-revision]" ? revisionMarkElements : []),
-      getSelection: () => null,
+      getSelection: () => selection,
     },
   };
   const windowListeners = [];
@@ -205,6 +207,27 @@ function bootSdk({ runAnimationFrames = false, revisionsScript = null, revisionM
       };
       listener.handler(event);
       return event;
+    },
+    // Releases the mouse over `target` with `text` selected inside it, as a drag-select would.
+    selectText(target, text) {
+      const textNode = { nodeType: 3, parentElement: target, parentNode: { childNodes: [] } };
+      textNode.parentNode.childNodes.push(textNode);
+      const range = {
+        collapsed: false,
+        commonAncestorContainer: textNode,
+        startContainer: textNode,
+        startOffset: 0,
+        endContainer: textNode,
+        endOffset: text.length,
+        cloneRange: () => range,
+        getClientRects: () => [],
+        getBoundingClientRect: () => target.getBoundingClientRect(),
+      };
+      selection = { rangeCount: 1, getRangeAt: () => range, toString: () => text };
+      const listener = documentListeners.find((entry) => entry.type === "mouseup");
+      assert.ok(listener, "the SDK registers a document mouseup listener");
+      listener.handler({ target });
+      selection = null;
     },
     setDocumentQuery(query) {
       documentQuery = query;
@@ -735,4 +758,19 @@ test("Ctrl-click follows a link even when the link already has a queued note", (
     sdk.posted.slice(postedBefore).some((message) => message.type === "lavish:editQueuedAnchor"),
     false,
   );
+});
+
+test("Ctrl-click on a link after a text selection does not eat the next plain click", () => {
+  const sdk = bootSdk();
+  const { link } = buildLink(sdk);
+  const paragraph = appendTo(sdk.body, cell("p", "Just prose"));
+  sdk.selectText(paragraph, "prose");
+  assert.match(sdk.card().innerHTML, /Annotate text/, "the selection opens a text annotation card");
+
+  const followed = sdk.click(link, { ctrlKey: true });
+  assert.equal(followed.defaultPrevented, false);
+
+  sdk.click(paragraph);
+
+  assert.match(sdk.card().innerHTML, /Annotate &lt;p&gt;/);
 });
