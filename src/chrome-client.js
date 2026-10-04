@@ -912,8 +912,68 @@ function chatBubbleHtml(entry) {
     "<small>You</small>" +
     anchorHtml(entry.anchor) +
     userBubbleTextHtml(entry, entry.text) +
-    bubbleAttachmentsHtml(entry)
+    bubbleAttachmentsHtml(entry) +
+    receiptHtml(entry)
   );
+}
+
+// Delivery receipt (docs/delivery-acks.md): the per-note view of what the server observed. Seen,
+// Working, and Done are stamps on the entry, so the row is derived from it on every render and
+// never tracked here. Before Seen, the row says why, from the presence the live stream reports.
+const RECEIPT_CHECK_SVG =
+  '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function receiptTime(at) {
+  const date = new Date(String(at));
+  return Number.isNaN(date.getTime())
+    ? String(at)
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function receiptStepHtml(label, at) {
+  const ticked = Boolean(at);
+  return (
+    '<span class="receipt-step' +
+    (ticked ? " is-done" : "") +
+    '"' +
+    (ticked ? ' title="' + escapeHtml(label + " " + receiptTime(at)) + '"' : "") +
+    '><span class="receipt-box">' +
+    (ticked ? RECEIPT_CHECK_SVG : "") +
+    "</span>" +
+    label +
+    "</span>"
+  );
+}
+
+// Every branch must be true where it is shown: `waiting` is no poll at all, `listening` is a poll
+// that will take the note within milliseconds, and `working` or an external listener is an agent
+// whose next poll will take it.
+function receiptNoteText() {
+  if (agentPresence === "waiting") return "No agent is listening";
+  if (agentPresence === "listening") return "Delivering";
+  return "Agent is busy; delivered on its next poll";
+}
+
+function receiptHtml(entry) {
+  return (
+    '<div class="receipt">' +
+    receiptStepHtml("Seen", entry.delivered_at) +
+    receiptStepHtml("Working", entry.working_at) +
+    receiptStepHtml("Done", entry.done_at) +
+    (entry.delivered_at ? "" : '<span class="receipt-note">' + escapeHtml(receiptNoteText()) + "</span>") +
+    "</div>"
+  );
+}
+
+// The sent user bubbles on screen with the entry each was rendered from, so a presence change can
+// re-render the ones whose receipt names it. Rebuilt whenever `syncChat` replaces the transcript.
+let renderedUserBubbles = [];
+
+function refreshUnseenReceipts() {
+  for (const { el, entry } of renderedUserBubbles) {
+    if (entry.delivered_at) continue;
+    el.innerHTML = chatBubbleHtml(entry);
+  }
 }
 
 function addChat(entry, shouldScroll = true) {
@@ -924,7 +984,9 @@ function addChat(entry, shouldScroll = true) {
 
   const el = document.createElement("div");
   el.className = "bubble " + role;
-  el.innerHTML = chatBubbleHtml({ ...entry, role, text });
+  const rendered = { ...entry, role, text };
+  el.innerHTML = chatBubbleHtml(rendered);
+  if (role === "user") renderedUserBubbles.push({ el, entry: rendered });
   chatLog.appendChild(el);
   if (shouldScroll) scrollElementIntoView(el);
   return el;
@@ -1050,6 +1112,7 @@ function syncChat(chat, revision) {
   for (const el of [...chatLog.querySelectorAll(".bubble.user,.bubble.agent:not(.agent-working)")]) {
     el.remove();
   }
+  renderedUserBubbles = [];
 
   let lastChatBubble = null;
   for (const item of nextChat) lastChatBubble = addChat(item, false) || lastChatBubble;
@@ -1067,6 +1130,7 @@ function setAgentPresence(state) {
   agentPresence = state === "listening" || state === "external" || state === "working" ? state : "waiting";
   updateSendState();
   renderSheetSummary();
+  refreshUnseenReceipts();
   if (presenceBanner) presenceBanner.hidden = ended || agentPresence !== "waiting";
 
   // A supervisor-owned process-only listener is busy on the agent's behalf. It must not make the

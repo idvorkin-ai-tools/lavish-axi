@@ -539,7 +539,8 @@ export async function serve({
   // stamps on a closed poll; it means nothing to an agent and stays off the wire.
   function agentFacingFeedback(result) {
     if (!result || result.status !== "feedback" || !("delivery_seq" in result)) return result;
-    const { delivery_seq: _ignored, ...rest } = result;
+    const rest = { ...result };
+    delete rest.delivery_seq;
     return rest;
   }
 

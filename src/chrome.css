@@ -1301,6 +1301,51 @@ body.lavish {
   border-radius: 3px;
   padding: 0 3px;
 }
+/* Delivery receipt: the per-note view of agent presence (docs/delivery-acks.md). Three boxes,
+   ticked as the server observes each step; the note before Seen says why it is still unticked. */
+.receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--fg-faint);
+}
+.receipt-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.receipt-step.is-done {
+  color: var(--fg-muted);
+}
+.receipt-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.receipt-step.is-done .receipt-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.receipt-box svg {
+  width: 9px;
+  height: 9px;
+}
+.receipt-note {
+  flex-basis: 100%;
+  text-align: right;
+  font-style: italic;
+}
 .bubble-attachments {
   display: flex;
   flex-wrap: wrap;

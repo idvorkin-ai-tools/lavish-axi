@@ -47,6 +47,12 @@ function assertPromptIdentity(id) {
   assert.match(String(id || ""), PROMPT_ID_RE);
 }
 
+// A sent user bubble ends with its delivery receipt (docs/delivery-acks.md). Tests about the
+// bubble's words, anchor, and thumbnails compare everything before it; the receipt has its own tests.
+function withoutReceipt(html) {
+  return String(html).replace(/<div class="receipt">[\s\S]*<\/div>$/, "");
+}
+
 function identicalProjectionNote(offset) {
   return {
     prompt: "Make this phrase punchier",
@@ -7287,7 +7293,7 @@ test("a sent batch settles in place: notes read Sending until the server's trans
     /^<small>You<\/small><div class="anchor" [^>]*><span class="anchor-kind">&lt;h2&gt;<\/span>/,
   );
   assert.match(bubbles[0].innerHTML, /<div class="bubble-text">Rename this<\/div>/);
-  assert.equal(bubbles[1].innerHTML, '<small>You</small><div class="bubble-text">Keep the table</div>');
+  assert.equal(withoutReceipt(bubbles[1].innerHTML), '<small>You</small><div class="bubble-text">Keep the table</div>');
 });
 
 test("an accepted note merges before live entries that arrived before its response", async () => {
@@ -7324,7 +7330,11 @@ test("an accepted note merges before live entries that arrived before its respon
 
     const bubbles = chrome.element("chatLog").children;
     assert.equal(bubbles.length, 2, eventName);
-    assert.equal(bubbles[0].innerHTML, '<small>You</small><div class="bubble-text">Sent note</div>', eventName);
+    assert.equal(
+      withoutReceipt(bubbles[0].innerHTML),
+      '<small>You</small><div class="bubble-text">Sent note</div>',
+      eventName,
+    );
     assert.equal(bubbles[1].innerHTML, '<small>Agent</small><div class="chat-md"><p>Newer reply</p></div>', eventName);
     assert.equal(chrome.element("queuedLog").innerHTML, "", eventName);
   }
@@ -7827,7 +7837,7 @@ test("an older live sync does not hide the transcript accepted by the prompts re
   assert.equal(chrome.element("queuedLog").innerHTML, "");
   assert.equal(chrome.element("chatLog").children.length, 1);
   assert.equal(
-    chrome.element("chatLog").children[0].innerHTML,
+    withoutReceipt(chrome.element("chatLog").children[0].innerHTML),
     '<small>You</small><div class="bubble-text">Sent note</div>',
   );
 });
@@ -8027,7 +8037,10 @@ test("a synced transcript renders sent notes with anchors and thumbnails and nev
     }),
   });
   const [message, note, reply] = chrome.element("chatLog").children;
-  assert.equal(message.innerHTML, '<small>You</small><div class="bubble-text">&lt;b&gt;bold&lt;/b&gt;</div>');
+  assert.equal(
+    withoutReceipt(message.innerHTML),
+    '<small>You</small><div class="bubble-text">&lt;b&gt;bold&lt;/b&gt;</div>',
+  );
   assert.match(
     note.innerHTML,
     /<span class="anchor-kind">text<\/span><span class="anchor-excerpt text">“&lt;i&gt;sel&lt;\/i&gt;”<\/span>/,
@@ -8646,4 +8659,98 @@ test("a keyed replacement of an untouched open edit leaves no unsent note", asyn
   );
   assert.doesNotMatch(chrome.element("queuedLog").innerHTML, /queued-edit-input/);
   assert.equal(retiredDraftNotes(chrome).length, 0);
+});
+
+// Delivery acks (docs/delivery-acks.md): each sent bubble carries a receipt row derived from the
+// entry's stamps and, before Seen, from the live presence the chrome already holds.
+
+function receiptSteps(html) {
+  return [...String(html).matchAll(/class="receipt-step( is-done)?"/g)].map((match) => Boolean(match[1]));
+}
+
+function receiptNote(html) {
+  const match = String(html).match(/<span class="receipt-note">([^<]*)<\/span>/);
+  return match ? match[1] : "";
+}
+
+test("a sent bubble's receipt follows the entry's seen, working, and done stamps", async () => {
+  const chrome = await createChromeHarness({
+    sessionData: {
+      ...defaultSessionData,
+      initialChat: [
+        { role: "user", kind: "message", text: "Sent only" },
+        {
+          role: "user",
+          kind: "message",
+          text: "Seen and working",
+          delivered_at: "2026-10-04T10:00:00.000Z",
+          delivered_seq: 1,
+          working_at: "2026-10-04T10:00:05.000Z",
+        },
+        {
+          role: "user",
+          kind: "message",
+          text: "Answered without an edit",
+          delivered_at: "2026-10-04T10:00:00.000Z",
+          delivered_seq: 1,
+          done_at: "2026-10-04T10:01:00.000Z",
+        },
+        { role: "agent", text: "Reply", html: "<p>Reply</p>" },
+      ],
+    },
+  });
+  const bubbles = chrome.element("chatLog").children;
+  assert.equal(bubbles.length, 4);
+  assert.deepEqual(receiptSteps(bubbles[0].innerHTML), [false, false, false]);
+  assert.equal(receiptNote(bubbles[0].innerHTML), "No agent is listening");
+  assert.deepEqual(receiptSteps(bubbles[1].innerHTML), [true, true, false]);
+  assert.equal(receiptNote(bubbles[1].innerHTML), "");
+  assert.deepEqual(receiptSteps(bubbles[2].innerHTML), [true, false, true]);
+  assert.equal(receiptNote(bubbles[2].innerHTML), "");
+  assert.deepEqual(receiptSteps(bubbles[3].innerHTML), [], "agent bubbles carry no receipt");
+  const seenAt = new Date("2026-10-04T10:00:00.000Z").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  assert.ok(bubbles[1].innerHTML.includes(`title="Seen ${seenAt}"`), "a ticked step names its time");
+});
+
+test("an unseen bubble's receipt names the live presence and re-renders when it changes", async () => {
+  const chrome = await createChromeHarness({
+    sessionData: {
+      ...defaultSessionData,
+      initialChat: [
+        { role: "user", kind: "message", text: "Waiting" },
+        { role: "user", kind: "message", text: "Seen", delivered_at: "2026-10-04T10:00:00.000Z", delivered_seq: 1 },
+      ],
+    },
+  });
+  const bubbles = chrome.element("chatLog").children;
+  const seenHtml = bubbles[1].innerHTML;
+  const presence = (data) => chrome.eventSource().listeners.get("agent-presence")({ data: JSON.stringify(data) });
+
+  presence({ state: "working", mode: "agent-busy" });
+  assert.equal(receiptNote(bubbles[0].innerHTML), "Agent is busy; delivered on its next poll");
+  presence({ state: "listening", mode: "external-listener" });
+  assert.equal(receiptNote(bubbles[0].innerHTML), "Agent is busy; delivered on its next poll");
+  presence({ state: "listening", mode: "agent-listener" });
+  assert.equal(receiptNote(bubbles[0].innerHTML), "Delivering");
+  presence({ state: "waiting" });
+  assert.equal(receiptNote(bubbles[0].innerHTML), "No agent is listening");
+  assert.equal(bubbles[1].innerHTML, seenHtml, "a seen bubble does not depend on presence");
+});
+
+test("a chat-sync that stamps a note re-renders its receipt", async () => {
+  const entry = { role: "user", kind: "message", text: "Make it blue", prompt_id: "p-1" };
+  const chrome = await createChromeHarness({
+    sessionData: { ...defaultSessionData, initialChat: [entry], initialChatRevision: 1 },
+  });
+  assert.deepEqual(receiptSteps(chrome.element("chatLog").children[0].innerHTML), [false, false, false]);
+
+  chrome.eventSource().listeners.get("chat-sync")({
+    data: JSON.stringify({
+      chat: [{ ...entry, delivered_at: "2026-10-04T10:00:00.000Z", delivered_seq: 1 }],
+      chat_revision: 2,
+    }),
+  });
+  const seen = chrome.element("chatLog").children[0].innerHTML;
+  assert.deepEqual(receiptSteps(seen), [true, false, false]);
+  assert.equal(receiptNote(seen), "");
 });

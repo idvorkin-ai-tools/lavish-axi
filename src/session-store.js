@@ -626,12 +626,17 @@ export class SessionStore {
       if (prompts.length === 0 && artifactFailures.length === 0) {
         return alreadyEnded ? { status: "ended", ended_by: session.ended_by } : { status: "waiting" };
       }
+      // Seen (docs/delivery-acks.md): this take drains every pending prompt and `queuePrompts`
+      // shares this lock, so the user entries with no stamp are exactly this batch. The sequence
+      // rides on the result so a closed-poll restore can undo only this take's stamps.
+      const deliverySeq = normalizeRevision(session.delivery_seq) + 1;
       const result = {
         status: "feedback",
         dom_snapshot: session.dom_snapshot || "",
         prompts,
         ...(artifactFailures.length > 0 ? { artifact_failures: artifactFailures } : {}),
         ...(alreadyEnded ? { session_ended: true, ended_by: session.ended_by } : {}),
+        ...(prompts.length > 0 ? { delivery_seq: deliverySeq } : {}),
       };
       // Delivery clears pending prompts, so retain the attachment ids for a bounded
       // grace window while the polling agent opens the absolute paths it received.
@@ -655,16 +660,11 @@ export class SessionStore {
       const current = [...deliveredIds].map((id) => ({ id, at: deliveredNow }));
       const historyRoom = Math.max(0, MAX_DELIVERED_ATTACHMENTS - current.length);
       session.delivered_attachments = [...carried.slice(-historyRoom), ...current];
-      // Seen (docs/delivery-acks.md): this take drains every pending prompt and `queuePrompts`
-      // shares this lock, so the user entries with no stamp are exactly this batch. The sequence
-      // rides on the result so a closed-poll restore can undo only this take's stamps.
       if (prompts.length > 0) {
-        const deliverySeq = normalizeRevision(session.delivery_seq) + 1;
         session.delivery_seq = deliverySeq;
         if (stampDelivered(session.chat, deliverySeq, new Date(deliveredNow).toISOString())) {
           session.chat_revision = normalizeRevision(session.chat_revision) + 1;
         }
-        result.delivery_seq = deliverySeq;
       }
       session.prompts = [];
       session.artifact_failures = [];

@@ -37,7 +37,7 @@ function diagnosticPayload(load, sequence, body = {}) {
 
 function feedbackResult(result) {
   assert.equal(result.status, "feedback");
-  return /** @type {{ status: string, dom_snapshot: string, prompts: any[], artifact_failures?: any[], session_ended?: boolean, ended_by?: string }} */ (
+  return /** @type {{ status: string, dom_snapshot: string, prompts: any[], artifact_failures?: any[], session_ended?: boolean, ended_by?: string, delivery_seq?: number }} */ (
     result
   );
 }

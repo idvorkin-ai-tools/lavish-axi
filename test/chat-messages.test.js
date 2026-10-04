@@ -399,6 +399,7 @@ test("boundStoredChat never lets a single oversize entry exceed the hard cap", (
 
 // Delivery-ack stamps (docs/delivery-acks.md) are pure over the chat array.
 
+/** @returns {Record<string, any>} */
 function userEntry(text, extra = {}) {
   return { role: "user", kind: "message", text, at, ...extra };
 }
