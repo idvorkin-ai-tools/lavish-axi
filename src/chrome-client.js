@@ -975,15 +975,10 @@ function receiptHtml(entry) {
   );
 }
 
-// The sent user bubbles on screen with the entry each was rendered from, so a presence change can
-// re-render the ones whose receipt names it. Rebuilt whenever `syncChat` replaces the transcript.
-let renderedUserBubbles = [];
-
+// Only the pre-Seen line names the live presence, so a presence change rewrites that line alone.
+// Rebuilding the bubble would also rebuild its thumbnails and undo an "Image expired" placeholder.
 function refreshUnseenReceipts() {
-  for (const { el, entry } of renderedUserBubbles) {
-    if (entry.delivered_at || !hasReceipt(entry)) continue;
-    el.innerHTML = chatBubbleHtml(entry);
-  }
+  for (const note of chatLog.querySelectorAll(".receipt-note")) note.textContent = receiptNoteText();
 }
 
 function addChat(entry, shouldScroll = true) {
@@ -994,9 +989,7 @@ function addChat(entry, shouldScroll = true) {
 
   const el = document.createElement("div");
   el.className = "bubble " + role;
-  const rendered = { ...entry, role, text };
-  el.innerHTML = chatBubbleHtml(rendered);
-  if (role === "user") renderedUserBubbles.push({ el, entry: rendered });
+  el.innerHTML = chatBubbleHtml({ ...entry, role, text });
   chatLog.appendChild(el);
   if (shouldScroll) scrollElementIntoView(el);
   return el;
@@ -1122,7 +1115,6 @@ function syncChat(chat, revision) {
   for (const el of [...chatLog.querySelectorAll(".bubble.user,.bubble.agent:not(.agent-working)")]) {
     el.remove();
   }
-  renderedUserBubbles = [];
 
   let lastChatBubble = null;
   for (const item of nextChat) lastChatBubble = addChat(item, false) || lastChatBubble;

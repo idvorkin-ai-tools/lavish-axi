@@ -609,24 +609,31 @@ export function unstampDelivery(chat, seq) {
   return changed;
 }
 
+// Working and Done are evidence about the current review round only. `closedSeq` is the last take
+// of the rounds that ended before the session was reopened; a note such a round left at Seen stays
+// there, because an edit or reply in a later round is about that round's notes, not this one.
+function isOpenDelivery(entry, closedSeq) {
+  return isUserEntry(entry) && Boolean(entry.delivered_at) && !entry.done_at && entry.delivered_seq > closedSeq;
+}
+
 // The artifact changed after a delivery: the agent is working on what it was handed. Only the first
 // change after delivery is evidence; later saves add nothing. An entry already answered stays Done.
-export function stampWorking(chat, at) {
+export function stampWorking(chat, at, closedSeq = 0) {
   let changed = false;
   for (const entry of Array.isArray(chat) ? chat : []) {
-    if (!isUserEntry(entry) || !entry.delivered_at || entry.working_at || entry.done_at) continue;
+    if (!isOpenDelivery(entry, closedSeq) || entry.working_at) continue;
     entry.working_at = String(at);
     changed = true;
   }
   return changed;
 }
 
-// An agent reply answers everything the agent has seen. An entry that was sent but never delivered
-// is not done - the agent has not read it - and stays for the next poll.
-export function stampDone(chat, at) {
+// An agent reply answers everything the agent has seen this round. An entry that was sent but never
+// delivered is not done - the agent has not read it - and stays for the next poll.
+export function stampDone(chat, at, closedSeq = 0) {
   let changed = false;
   for (const entry of Array.isArray(chat) ? chat : []) {
-    if (!isUserEntry(entry) || !entry.delivered_at || entry.done_at) continue;
+    if (!isOpenDelivery(entry, closedSeq)) continue;
     entry.done_at = String(at);
     changed = true;
   }

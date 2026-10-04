@@ -599,7 +599,7 @@ export async function serve({
         `[lavish] closed poll feedback restore failed; the batch was lost: ${restoreError?.message || restoreError}`,
       );
     } else if (persistedNothing) {
-      writeLog("[lavish] closed poll feedback restore was refused; nothing was persisted and the batch was lost");
+      writeLog("[lavish] closed poll feedback restore was refused; nothing was re-queued and the batch was lost");
     } else if (!restoredPrompts || JSON.stringify(restoredPrompts) !== JSON.stringify(prompts) || !failuresRestored) {
       writeLog("[lavish] closed poll feedback restore was incomplete; delivery was not marked");
     }
@@ -607,8 +607,9 @@ export async function serve({
       (Array.isArray(restoredPrompts) && restoredPrompts.length > 0) ||
       (Array.isArray(restoredFailures) && restoredFailures.length > 0);
     if (pendingAfterRestore) events.emit("feedback", key);
-    // A tab that saw the batch stamped Seen between the take and this restore learns it is not.
-    if (session && !persistedNothing) events.emit("chat-sync", key, session);
+    // A tab that saw the batch stamped Seen between the take and this restore learns it is not -
+    // a refused restore included, which still takes the stamps off.
+    await publishChatSync(key);
   }
   // Whiteboard sidecar files live next to state.json, keyed by session + diagram.
   const whiteboardStateRoot = path.dirname(stateFile);

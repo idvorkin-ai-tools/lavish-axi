@@ -18,7 +18,7 @@ Every state below is a fact the server records anyway. None of them asks the age
 | ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | `/api/:key/prompts` 200  | `SessionStore.queuePrompts` appends the note to `session.chat`                         | **Sent** - the server holds it for the next poll |
 | no poll in `activePolls` | `computePresence` is `waiting`; the chrome already shows "Your agent is not listening" | nobody is there to receive it                    |
-| `takeFeedback` succeeded | `/api/poll` wrote the batch to the agent's socket (`finishFeedbackDelivery`)           | **Seen** - the agent process has the bytes       |
+| `takeFeedback` succeeded | the store drained the batch for a poll; a poll that closed before the write undoes it  | **Seen** - the batch was handed to a poll        |
 | artifact file changed    | chokidar `reload` for the session key after a delivery                                 | **Working** - the agent is editing the artifact  |
 | `addAgentReply`          | `lavish-axi reply` / `poll --agent-reply`, or `/api/:key/agent-reply`                  | **Done** - the agent handed something back       |
 
@@ -57,11 +57,17 @@ the stamps with no new wire shape.
 - **A disconnected poll un-stamps its own take only.** `restoreClosedFeedback` passes the take's
   `delivery_seq` back; `queuePrompts` in `restore` mode deletes the stamps on entries carrying that
   sequence (delete, not null - the restore tests assert `chat` deep-equals its pre-take shape). Notes
-  queued in the window keep no stamp and are delivered, and stamped, by the next take.
+  queued in the window keep no stamp and are delivered, and stamped, by the next take. A restore that
+  is refused (an attachment no longer resolves) cannot put the prompts back, and still takes the
+  stamps off: the note is lost, and a Seen left on it would claim a delivery that never happened.
 - **Working stamps delivered-and-not-done entries.** `markWorking(key)` runs on the `reload` event. A
   reload with nothing delivered changes nothing and writes nothing.
 - **Done stamps delivered-and-not-done entries.** `addAgentReply` does it in the same write as the
   reply. An entry that was sent but never delivered is not marked done: the agent has not seen it.
+- **Working and Done stay inside one review round.** Reopening an ended session records the last
+  take so far as `session.closed_delivery_seq`, and neither stamp lands on an entry delivered at or
+  before it. A note `lavish-axi end` left at Seen stays Seen: a later round's edit or reply is about
+  that round's notes.
 - **Every stamp change bumps `chat_revision`.** `syncChat` in the chrome accepts a same-revision sync
   only when it contains the displayed entries; a higher revision is what makes it take the
   authoritative replacement.
@@ -81,8 +87,8 @@ readers say the word, not the glyph. Before 👀 lights, the row carries the hon
 presence stream. The session-wide "Working..." bubble and
 presence banner are unchanged; the receipt is the per-request view of the same facts.
 
-The receipt is re-rendered when presence changes, because the undelivered line depends on it and
-`addChat` renders a bubble once.
+A presence change rewrites only the undelivered line, the one part of the row that depends on it.
+The rest of the bubble is left alone, so a thumbnail already replaced by "Image expired" stays so.
 
 ## CLI and API changes
 

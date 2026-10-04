@@ -2663,6 +2663,69 @@ test("a restored take removes only its own seen stamps and the next take re-stam
   });
 });
 
+test("a refused restore still removes its take's seen stamps", async () => {
+  await withStore(async ({ store, session }) => {
+    const id = "a".repeat(64);
+    const attachment = { id, path: "/tmp/a.png", mime: "image/png", bytes: 1, name: "a.png" };
+    await store.queuePrompts(
+      session.key,
+      { prompts: [{ uid: "A", prompt: "First", selector: "", tag: "message", text: "", attachments: [{ id }] }] },
+      { resolveAttachment: async () => attachment },
+    );
+    const sent = await store.findByKey(session.key);
+    const taken = feedbackResult(await store.takeFeedback(session.key));
+    const seen = await store.findByKey(session.key);
+    assert.deepEqual(
+      stampsOf(seen).map((entry) => entry.delivered),
+      [true],
+    );
+
+    // The poll closed before its response was written, and the image is gone by the restore.
+    const refused = await store.queuePrompts(
+      session.key,
+      { dom_snapshot: taken.dom_snapshot, prompts: taken.prompts, delivery_seq: taken.delivery_seq },
+      { restore: true, resolveAttachment: async () => null },
+    );
+    assert.ok(refused.rejected?.length > 0, "the restore was refused");
+
+    const after = await store.findByKey(session.key);
+    assert.deepEqual(after.prompts, [], "nothing was re-queued");
+    assert.deepEqual(after.chat[0], sent.chat[0], "the note no agent received does not read Seen");
+    assert.ok(after.chat_revision > seen.chat_revision, "the chrome accepts the un-stamped transcript");
+
+    await store.addAgentReply(session.key, "About something else.");
+    assert.deepEqual(stampsOf(await store.findByKey(session.key)), [
+      { text: "First", delivered: false, seq: null, working: false, done: false },
+    ]);
+  });
+});
+
+test("a note an ended round left at seen is not marked by the next round's edit or reply", async () => {
+  await withStore(async ({ store, session, artifact }) => {
+    await store.queuePrompts(session.key, {
+      prompts: [{ uid: "A", prompt: "First", selector: "", tag: "message", text: "" }],
+    });
+    feedbackResult(await store.takeFeedback(session.key));
+    await store.endSession(session.key, "agent");
+    await store.upsertSession(artifact, "http://localhost:4387/session/test");
+    // A plain re-open of the now-open session does not move the boundary again.
+    await store.upsertSession(artifact, "http://localhost:4387/session/test");
+
+    assert.equal(await store.markWorking(session.key), null, "an edit in the new round is not about the old note");
+    await store.queuePrompts(session.key, {
+      prompts: [{ uid: "B", prompt: "Second", selector: "", tag: "message", text: "" }],
+    });
+    feedbackResult(await store.takeFeedback(session.key));
+    await store.markWorking(session.key);
+    await store.addAgentReply(session.key, "Handled the second one.");
+
+    assert.deepEqual(stampsOf(await store.findByKey(session.key)), [
+      { text: "First", delivered: true, seq: 1, working: false, done: false },
+      { text: "Second", delivered: true, seq: 2, working: true, done: true },
+    ]);
+  });
+});
+
 test("an agent reply marks delivered entries done and leaves undelivered ones alone", async () => {
   await withStore(async ({ store, session }) => {
     await store.queuePrompts(session.key, {

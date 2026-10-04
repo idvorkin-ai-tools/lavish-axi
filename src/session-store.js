@@ -156,6 +156,11 @@ export class SessionStore {
       // Counts the takes that stamped Seen on chat entries (docs/delivery-acks.md). Reset on reopen
       // and a later restore could un-stamp an older take's entries, so it is carried like chat.
       delivery_seq: normalizeRevision(existing.delivery_seq),
+      // The last take of the rounds that have ended. Reopening starts a new round: a note an ended
+      // round left at Seen stays Seen, because a later round's edit or reply is not about it.
+      closed_delivery_seq: normalizeRevision(
+        existing.status === "ended" ? existing.delivery_seq : existing.closed_delivery_seq,
+      ),
       updated_at: new Date().toISOString(),
     };
     state.sessions[key] = session;
@@ -235,7 +240,15 @@ export class SessionStore {
         else delete prompt.attachments;
       }
     }
+    // Nothing reached an agent, so the Seen stamps that take wrote come off again - only that
+    // take's: a note queued in the window is unstamped already and is delivered by the next take.
+    // This holds whether or not the batch can be put back: a refused restore loses the prompts, and
+    // a note left Seen would then claim a delivery that never happened.
+    const deliverySeq = restoring ? normalizeRevision(payload.delivery_seq) : 0;
+    const unstamped = deliverySeq > 0 && unstampDelivery(session.chat, deliverySeq);
+    if (unstamped) session.chat_revision = normalizeRevision(session.chat_revision) + 1;
     if (rejected.length) {
+      if (unstamped) await this.writeState(state);
       return {
         rejected: rejected.slice(0, MAX_REPORTED_ATTACHMENT_REJECTIONS),
         caps: {
@@ -309,12 +322,6 @@ export class SessionStore {
         : [];
       const existingFailures = Array.isArray(session.artifact_failures) ? session.artifact_failures : [];
       session.artifact_failures = mergeArtifactFailures(restoredFailures, existingFailures).failures;
-      // Nothing reached an agent, so the Seen stamps that take wrote come off again - only that
-      // take's: a note queued in the window is unstamped already and is delivered by the next take.
-      const deliverySeq = normalizeRevision(payload.delivery_seq);
-      if (deliverySeq > 0 && unstampDelivery(session.chat, deliverySeq)) {
-        session.chat_revision = normalizeRevision(session.chat_revision) + 1;
-      }
     }
     session.pending_prompts = session.prompts.length;
     const restoredSnapshot = String(payload.domSnapshot || payload.dom_snapshot || "");
@@ -711,7 +718,7 @@ export class SessionStore {
       const at = new Date().toISOString();
       // Done (docs/delivery-acks.md): the reply answers what the agent has seen. Stamped in the same
       // write as the reply, with the reply's own time, and never on an entry no poll has delivered.
-      stampDone(session.chat, at);
+      stampDone(session.chat, at, normalizeRevision(session.closed_delivery_seq));
       session.chat = [...(session.chat || []), { role: "agent", text: String(text || ""), at }];
       applyTranscriptBound(session);
       session.chat_revision = normalizeRevision(session.chat_revision) + 1;
@@ -730,7 +737,7 @@ export class SessionStore {
       const session = state.sessions[key];
       if (!session) return null;
       const at = new Date().toISOString();
-      if (!stampWorking(session.chat, at)) return null;
+      if (!stampWorking(session.chat, at, normalizeRevision(session.closed_delivery_seq))) return null;
       session.chat_revision = normalizeRevision(session.chat_revision) + 1;
       session.updated_at = at;
       await this.writeState(state);

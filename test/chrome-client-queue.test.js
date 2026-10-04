@@ -146,7 +146,15 @@ async function createChromeHarness({
       type: "",
       className: "",
       value: "",
-      innerHTML: "",
+      html: "",
+      // Assigning innerHTML replaces the element's subtree, as the real DOM does.
+      get innerHTML() {
+        return this.html;
+      },
+      set innerHTML(value) {
+        this.html = String(value);
+        this.children = [];
+      },
       textContent: "",
       scrollTop: 0,
       scrollHeight: 0,
@@ -207,6 +215,18 @@ async function createChromeHarness({
         const matches = [];
         const walk = (node) => {
           for (const child of node.children || []) {
+            // The receipt line lives in the bubble's markup, not in `children`: hand back a node
+            // whose text edits that span in place, leaving the rest of the bubble untouched.
+            if (selector === ".receipt-note" && /<span class="receipt-note">[^<]*<\/span>/.test(child.html)) {
+              matches.push({
+                set textContent(value) {
+                  child.html = child.html.replace(
+                    /<span class="receipt-note">[^<]*<\/span>/,
+                    '<span class="receipt-note">' + String(value) + "</span>",
+                  );
+                },
+              });
+            }
             const childClasses = String(child.className || "").split(/\s+/);
             if (selector === ".bubble.user,.bubble.agent:not(.agent-working)") {
               if (
@@ -8741,6 +8761,28 @@ test("an unseen bubble's receipt names the live presence and re-renders when it 
   presence({ state: "waiting" });
   assert.equal(receiptNote(bubbles[0].innerHTML), "No agent is listening");
   assert.equal(bubbles[1].innerHTML, seenHtml, "a seen bubble does not depend on presence");
+});
+
+test("a presence change leaves an unseen bubble's expired image placeholder in place", async () => {
+  const chrome = await createChromeHarness({
+    sessionData: {
+      ...defaultSessionData,
+      initialChat: [{ role: "user", kind: "message", text: "See image", attachments: [{ id: "a1", name: "ref.png" }] }],
+    },
+  });
+  const chatLog = chrome.element("chatLog");
+  const [bubble] = chatLog.children;
+  const image = chrome.element("unseen-bubble-image");
+  image.tagName = "IMG";
+  image.className = "bubble-attachment";
+  image.alt = "ref.png";
+  bubble.appendChild(image);
+  chatLog.dispatch("error", { target: image });
+  assert.equal(bubble.children[0].textContent, "Image expired");
+
+  chrome.eventSource().listeners.get("agent-presence")({ data: JSON.stringify({ state: "working" }) });
+  assert.equal(receiptNote(bubble.innerHTML), "Agent is busy; delivered on its next poll");
+  assert.equal(bubble.children[0]?.textContent, "Image expired", "the placeholder is not rebuilt into an image");
 });
 
 test("a chat-sync that stamps a note re-renders its receipt", async () => {
