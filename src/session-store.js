@@ -15,7 +15,16 @@ import {
   serializeLayoutWarnings,
 } from "./layout-warnings.js";
 import { AsyncMutex } from "./async-mutex.js";
-import { boundStoredChat, chatEntryForPrompt, collectChatAckIds, normalizePromptId } from "./chat-messages.js";
+import {
+  boundStoredChat,
+  chatEntryForPrompt,
+  collectChatAckIds,
+  normalizePromptId,
+  stampDelivered,
+  stampDone,
+  stampWorking,
+  unstampDelivery,
+} from "./chat-messages.js";
 import { normalizeMermaidNodeTarget } from "./mermaid-node.js";
 import { EXCALIDRAW_SCENE_TARGET_TYPE, normalizeExcalidrawSceneTarget } from "./whiteboard-core.js";
 
@@ -143,6 +152,9 @@ export class SessionStore {
       // Compact prompt_id acks for bubbles evicted by the stored-chat byte bound. Reopening
       // must keep them: they are the settlement/dedup source once the visible entry is gone.
       chat_ack_ids: Array.isArray(existing.chat_ack_ids) ? existing.chat_ack_ids : [],
+      // Counts the takes that stamped Seen on chat entries (docs/delivery-acks.md). Reset on reopen
+      // and a later restore could un-stamp an older take's entries, so it is carried like chat.
+      delivery_seq: normalizeRevision(existing.delivery_seq),
       updated_at: new Date().toISOString(),
     };
     state.sessions[key] = session;
@@ -296,6 +308,12 @@ export class SessionStore {
         : [];
       const existingFailures = Array.isArray(session.artifact_failures) ? session.artifact_failures : [];
       session.artifact_failures = mergeArtifactFailures(restoredFailures, existingFailures).failures;
+      // Nothing reached an agent, so the Seen stamps that take wrote come off again - only that
+      // take's: a note queued in the window is unstamped already and is delivered by the next take.
+      const deliverySeq = normalizeRevision(payload.delivery_seq);
+      if (deliverySeq > 0 && unstampDelivery(session.chat, deliverySeq)) {
+        session.chat_revision = normalizeRevision(session.chat_revision) + 1;
+      }
     }
     session.pending_prompts = session.prompts.length;
     const restoredSnapshot = String(payload.domSnapshot || payload.dom_snapshot || "");
@@ -637,6 +655,17 @@ export class SessionStore {
       const current = [...deliveredIds].map((id) => ({ id, at: deliveredNow }));
       const historyRoom = Math.max(0, MAX_DELIVERED_ATTACHMENTS - current.length);
       session.delivered_attachments = [...carried.slice(-historyRoom), ...current];
+      // Seen (docs/delivery-acks.md): this take drains every pending prompt and `queuePrompts`
+      // shares this lock, so the user entries with no stamp are exactly this batch. The sequence
+      // rides on the result so a closed-poll restore can undo only this take's stamps.
+      if (prompts.length > 0) {
+        const deliverySeq = normalizeRevision(session.delivery_seq) + 1;
+        session.delivery_seq = deliverySeq;
+        if (stampDelivered(session.chat, deliverySeq, new Date(deliveredNow).toISOString())) {
+          session.chat_revision = normalizeRevision(session.chat_revision) + 1;
+        }
+        result.delivery_seq = deliverySeq;
+      }
       session.prompts = [];
       session.artifact_failures = [];
       session.pending_prompts = 0;
@@ -679,8 +708,28 @@ export class SessionStore {
       }
       if (requireOpen && session.status === "ended") return session;
       const at = new Date().toISOString();
+      // Done (docs/delivery-acks.md): the reply answers what the agent has seen. Stamped in the same
+      // write as the reply, with the reply's own time, and never on an entry no poll has delivered.
+      stampDone(session.chat, at);
       session.chat = [...(session.chat || []), { role: "agent", text: String(text || ""), at }];
       applyTranscriptBound(session);
+      session.chat_revision = normalizeRevision(session.chat_revision) + 1;
+      session.updated_at = at;
+      await this.writeState(state);
+      return session;
+    });
+  }
+
+  // Working (docs/delivery-acks.md): the artifact changed after a delivery, so the agent is acting on
+  // what it was handed. Returns the session when a stamp landed and null when there was nothing to
+  // stamp, in which case state.json is not rewritten - the watcher fires on every save.
+  async markWorking(key) {
+    return this.runExclusive(async () => {
+      const state = await this.readState();
+      const session = state.sessions[key];
+      if (!session) return null;
+      const at = new Date().toISOString();
+      if (!stampWorking(session.chat, at)) return null;
       session.chat_revision = normalizeRevision(session.chat_revision) + 1;
       session.updated_at = at;
       await this.writeState(state);
