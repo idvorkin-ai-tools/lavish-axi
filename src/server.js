@@ -275,7 +275,9 @@ export function resolveIdleTimeoutMs(env = process.env) {
 // How long an active poll waits for a review page to reconnect after the last one drops before it
 // returns browser_disconnected. A phone that locks or backgrounds the tab drops its socket, so the
 // 10s default can be too short there. Set LAVISH_AXI_DISCONNECT_GRACE_MS to a custom millisecond
-// budget, or to 0/off so a disconnect never releases the poll (only its own timeout or feedback does).
+// budget, or to 0/off so a disconnect never releases the poll (only feedback, an end, or its own
+// timeout does). Both resolvers clamp to 2147483647 ms, setTimeout's maximum; a larger delay would
+// overflow and fire after about 1 ms.
 export function resolveBrowserDisconnectGraceMs(env = process.env) {
   const raw = env.LAVISH_AXI_DISCONNECT_GRACE_MS?.trim();
   if (raw === undefined || raw === "") return DEFAULT_BROWSER_DISCONNECT_GRACE_MS;
