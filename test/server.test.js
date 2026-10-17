@@ -4416,6 +4416,8 @@ test("resolveIdleTimeoutMs defaults, parses, and only explicit opt-outs disable"
   assert.equal(resolveIdleTimeoutMs({ LAVISH_AXI_IDLE_TIMEOUT_MS: "-1" }), 30 * 60_000);
   assert.equal(resolveIdleTimeoutMs({ LAVISH_AXI_IDLE_TIMEOUT_MS: "30000ms" }), 30 * 60_000);
   assert.equal(resolveIdleTimeoutMs({ LAVISH_AXI_IDLE_TIMEOUT_MS: "later" }), 30 * 60_000);
+  // Node's setTimeout ceiling is 2^31-1 ms; larger delays fire after 1ms instead.
+  assert.equal(resolveIdleTimeoutMs({ LAVISH_AXI_IDLE_TIMEOUT_MS: "3000000000" }), 2 ** 31 - 1);
 });
 
 test("resolveBrowserDisconnectGraceMs defaults, parses, and only explicit opt-outs disable", () => {
@@ -4427,6 +4429,7 @@ test("resolveBrowserDisconnectGraceMs defaults, parses, and only explicit opt-ou
   assert.equal(resolveBrowserDisconnectGraceMs({ LAVISH_AXI_DISCONNECT_GRACE_MS: "-1" }), 10_000);
   assert.equal(resolveBrowserDisconnectGraceMs({ LAVISH_AXI_DISCONNECT_GRACE_MS: "30000ms" }), 10_000);
   assert.equal(resolveBrowserDisconnectGraceMs({ LAVISH_AXI_DISCONNECT_GRACE_MS: "later" }), 10_000);
+  assert.equal(resolveBrowserDisconnectGraceMs({ LAVISH_AXI_DISCONNECT_GRACE_MS: "3000000000" }), 2 ** 31 - 1);
 });
 
 async function expectDoneWithin(server, ms) {

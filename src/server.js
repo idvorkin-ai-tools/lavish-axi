@@ -269,7 +269,7 @@ export function resolveIdleTimeoutMs(env = process.env) {
   if (raw === "0" || raw.toLowerCase() === "off") return null;
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return DEFAULT_IDLE_TIMEOUT_MS;
-  return value;
+  return Math.min(value, 2147483647);
 }
 
 // How long an active poll waits for a review page to reconnect after the last one drops before it
@@ -282,7 +282,7 @@ export function resolveBrowserDisconnectGraceMs(env = process.env) {
   if (raw === "0" || raw.toLowerCase() === "off") return null;
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return DEFAULT_BROWSER_DISCONNECT_GRACE_MS;
-  return value;
+  return Math.min(value, 2147483647);
 }
 
 /**
