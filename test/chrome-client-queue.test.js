@@ -9193,6 +9193,21 @@ test("a collapsed toggle reports queued notes and unseen agent replies", async (
   assert.equal(sidebarState(chrome).unread, false);
 });
 
+test("clicking an annotated element while the panel is collapsed reopens it to edit the note", async () => {
+  const chrome = await createChromeHarness();
+  queueHeadingNote(chrome, "Shorter heading");
+  chrome.element("sidebarToggle").dispatch("click", {});
+  assert.equal(sidebarState(chrome).collapsed, true);
+
+  chrome.sendFrameMessage({ type: "lavish:editQueuedAnchor", selector: "main > h2" });
+
+  const state = sidebarState(chrome);
+  assert.equal(state.collapsed, false);
+  assert.equal(state.expanded, "true");
+  assert.equal(state.stored, null);
+  assert.match(chrome.element("queuedLog").innerHTML, /class="queued-edit-input"[^>]*>Shorter heading</);
+});
+
 test("an expanded desktop panel never marks a reply as unread", async () => {
   const chrome = await createChromeHarness();
   chrome.eventSource().listeners.get("agent-reply")({ data: JSON.stringify({ text: "Done." }) });

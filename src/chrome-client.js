@@ -1504,6 +1504,11 @@ function isConversationHidden() {
   return isMobileSheet() ? !sheetOpen : panelCollapsed;
 }
 
+function revealConversation() {
+  if (isMobileSheet()) setSheetOpen(true);
+  else if (panelCollapsed) setPanelCollapsed(false);
+}
+
 function setPanelCollapsed(collapsed) {
   panelCollapsed = Boolean(collapsed);
   try {
@@ -1563,7 +1568,7 @@ function editQueuedPrompt(index, { reveal = true } = {}) {
   editingPromptId = id;
   editingDraft = String(prompt.prompt || "");
   editFocusPending = true;
-  if (isMobileSheet()) setSheetOpen(true);
+  revealConversation();
   render();
   if (reveal && prompt.selector) postToFrame({ type: "lavish:revealElement", selector: String(prompt.selector) });
 }
