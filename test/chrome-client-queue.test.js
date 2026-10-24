@@ -9208,6 +9208,21 @@ test("clicking an annotated element while the panel is collapsed reopens it to e
   assert.match(chrome.element("queuedLog").innerHTML, /class="queued-edit-input"[^>]*>Shorter heading</);
 });
 
+test("clicking the element of a note already being edited reopens the collapsed panel to that edit", async () => {
+  const chrome = await createChromeHarness();
+  queueHeadingNote(chrome, "Shorter heading");
+  chrome.element("queuedLog").dispatch("click", { target: queuedLogNode(["bubble", "queued"], 0) });
+  typeIntoQueuedEdit(chrome, "Much shorter heading");
+  chrome.element("sidebarToggle").dispatch("click", {});
+  assert.equal(sidebarState(chrome).collapsed, true);
+
+  chrome.sendFrameMessage({ type: "lavish:editQueuedAnchor", selector: "main > h2" });
+
+  assert.equal(sidebarState(chrome).collapsed, false);
+  assert.equal(chrome.focusLog.at(-1), "queued-edit-input");
+  assert.match(chrome.element("queuedLog").innerHTML, /class="queued-edit-input"[^>]*>Much shorter heading</);
+});
+
 test("an expanded desktop panel never marks a reply as unread", async () => {
   const chrome = await createChromeHarness();
   chrome.eventSource().listeners.get("agent-reply")({ data: JSON.stringify({ text: "Done." }) });
